@@ -1,11 +1,12 @@
 # Required permissions:
-# - Manage Messages (required to delete messages)
+# - Manage Messages
+# - Manage Roles
 # - Moderate Members
 # - Read Message History
 # - View Channels
 # - Use Slash Commands (required to create and register commands in guilds)
 # Invite link:
-# https://discord.com/oauth2/authorize?client_id=1400424137100365865&permissions=1101659186176&scope=bot+applications.commands
+# https://discord.com/oauth2/authorize?client_id=1400424137100365865&permissions=1101927621632&scope=bot+applications.commands
 
 import discord
 from discord import app_commands as discord_command
