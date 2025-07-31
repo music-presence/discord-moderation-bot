@@ -91,13 +91,13 @@ async def moddelmsg(
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_to_use)
 
     # Cap timeout hours
-    timeout_hours = max(0, timeout_hours)
+    timeout_hours = min(max(0, timeout_hours), 48)
 
     # Timeout the user (if requested)
     if timeout_hours > 0:
         try:
             await user.timeout(
-                datetime.now(timezone.utc) + timedelta(hours=1),
+                datetime.now(timezone.utc) + timedelta(hours=timeout_hours),
                 reason=f"Timed out by {command_user.name}",
             )
         except discord.Forbidden:
