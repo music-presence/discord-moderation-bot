@@ -149,7 +149,7 @@ async def moddelmsg(
         )
 
     log_text = (
-        f"Deleted {len(deleted_messages)} messages from {user.mention} that were sent within the last {hours_to_use} hour{"s" if hours_to_use != 1 else ""}. "
+        f"Deleted {len(deleted_messages)} message{"s" if len(deleted_messages) != 1 else ""} from {user.mention} that were sent within the last {hours_to_use} hour{"s" if hours_to_use != 1 else ""}. "
         + (
             "They have not been timed out."
             if timeout_hours == 0
