@@ -5,3 +5,4 @@ moddelmsg:
   timeout_remove_roleid: 123123123123
   notify_channelid: 456456456456
   notify_user_id: 789789789789
+  quarantine_roleid: 123456789

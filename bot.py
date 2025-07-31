@@ -31,6 +31,7 @@ MODDELMSG_TIMEOUT_REMOVE_ROLEID = config.get("moddelmsg", {}).get(
 )
 MODDELMSG_NOTIFY_CHANNELID = config.get("moddelmsg", {}).get("notify_channelid", 0)
 MODDELMSG_NOTIFY_USER_ID = config.get("moddelmsg", {}).get("notify_user_id", 0)
+MODDELMSG_QUARANTINE_ROLEID = config.get("moddelmsg", {}).get("quarantine_roleid", 0)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -108,6 +109,14 @@ async def moddelmsg(
                 await user.remove_roles(role_to_remove, reason="User was timed out")
         except discord.Forbidden:
             print("Error: Failed to remove role during timeout. Missing permissions.")
+        try:
+            role_to_give = interaction.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
+            if role_to_give and role_to_give not in user.roles:
+                await user.add_roles(role_to_give, reason="User is quarantined")
+        except discord.Forbidden:
+            print(
+                "Error: Failed to add quarantine role during timeout. Missing permissions."
+            )
 
     deleted_messages = []
     notify_channel = interaction.guild.get_channel(MODDELMSG_NOTIFY_CHANNELID)
