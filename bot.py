@@ -34,6 +34,11 @@ MODDELMSG_NOTIFY_CHANNELID = config.get("moddelmsg", {}).get("notify_channelid",
 MODDELMSG_NOTIFY_USER_ID = config.get("moddelmsg", {}).get("notify_user_id", 0)
 MODDELMSG_QUARANTINE_ROLEID = config.get("moddelmsg", {}).get("quarantine_roleid", 0)
 
+FORBIDDEN_REGEXES = [
+    re.compile(pattern)
+    for pattern in config.get("moddelmsg", {}).get("forbidden_regexes", [])
+]
+
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -53,6 +58,82 @@ async def on_ready():
     for guild in client.guilds:
         await setup_guild(guild)
 
+@client.event
+async def on_message(message: discord.Message):
+    if message.author.bot:
+        return
+
+    # Bypass if > or = bot's role (for mods)
+    if isinstance(message.author, discord.Member):
+        bot_member = message.guild.me
+        if message.author.top_role >= bot_member.top_role:
+            return
+
+    for pattern in FORBIDDEN_REGEXES:
+        if pattern.search(message.content):
+            # Delete the message
+            try:
+                await message.delete()
+                print("[AUTOMOD] Message deleted.")
+            except Exception as e:
+                print(f"[AUTOMOD] Failed to delete message: {e}")
+
+            # Notify in the log channel
+            try:
+                notify_channel = message.guild.get_channel(MODDELMSG_NOTIFY_CHANNELID)
+                if notify_channel:
+                    embed = discord.Embed(
+                        title="🚨 AUTOMOD: Forbidden Content Deleted",
+                        description=(
+                            f"**Author :** {message.author.mention}\n"
+                            f"**Channel :** {message.channel.mention}\n"
+                            f"```{message.content}```"
+                        ),
+                        color=discord.Color.orange(),
+                        timestamp=datetime.now(timezone.utc),
+                    )
+                    embed.set_footer(text=f"User ID: {message.author.id}")
+                    await notify_channel.send(embed=embed)
+                    print("[AUTOMOD] Log embed sent to notify channel.")
+                else:
+                    print("[AUTOMOD] Notify channel not found.")
+            except Exception as e:
+                print(f"[AUTOMOD] Failed to send log embed: {e}")
+
+            # Add Quarantined role to the user
+            try:
+                quarantine_role = message.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
+                if quarantine_role and quarantine_role not in message.author.roles:
+                    await message.author.add_roles(
+                        quarantine_role,
+                        reason="Automod: Forbidden content detected"
+                    )
+                    print("[AUTOMOD] Quarantined role added.")
+                else:
+                    print("[AUTOMOD] Quarantine role missing or already present.")
+            except Exception as e:
+                print(f"[AUTOMOD] Failed to add Quarantined role: {e}")
+
+            # DM the quarantined user
+            try:
+                dm_embed = discord.Embed(
+                    title="🚨 You have been sanctioned",
+                    description=(
+                        "You have been given the **Quarantined** role because of the following message:\n"
+                        f"```{message.content}```\n"
+                        "If you believe this is a mistake, you can appeal by contacting the staff in the **#quarantined** channel."
+                    ),
+                    color=discord.Color.orange(),
+                    timestamp=datetime.now(timezone.utc),
+                )
+                dm_embed.set_footer(text="Music Presence Automod")
+                dm_embed.set_author(name=message.guild.name, icon_url=message.guild.icon.url if message.guild.icon else None)
+                await message.author.send(embed=dm_embed)
+                print("[AUTOMOD] DM sent to user.")
+            except Exception as e:
+                print(f"[AUTOMOD] Could not send DM to user: {e}")
+
+            break
 
 @tree.command(
     name="moddelmsg",
