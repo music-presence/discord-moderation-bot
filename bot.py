@@ -36,6 +36,9 @@ MODDELMSG_QUARANTINE_ROLEID = config.get("moddelmsg", {}).get("quarantine_roleid
 MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get(
     "quarantine_channelid", 0
 )
+MODDELMSG_QUARANTINE_WRITEPERMISSION_ROLEID = config.get("moddelmsg", {}).get(
+    "quarantine_writepermission_roleid", 0
+)
 
 FORBIDDEN_REGEXES = [
     re.compile(pattern, flags=re.IGNORECASE | re.MULTILINE)
@@ -56,7 +59,12 @@ async def setup_guild(guild: discord.Guild):
     print(f"Synced {len(commands)} commands: {', '.join([c.name for c in commands])}")
 
 
-async def quarantine_user(user: discord.Member, *, reason: str | None = None):
+async def quarantine_user(
+    user: discord.Member,
+    *,
+    with_write_permission: bool = False,
+    reason: str | None = None,
+):
     try:
         role_to_remove = user.guild.get_role(MODDELMSG_TIMEOUT_REMOVE_ROLEID)
         if role_to_remove and role_to_remove in user.roles:
@@ -75,6 +83,22 @@ async def quarantine_user(user: discord.Member, *, reason: str | None = None):
         print("Error: Failed to add quarantine role: Missing permissions")
     except Exception as e:
         print(f"Error: Failed to add quarantine role: {e}")
+    if with_write_permission:
+        try:
+            role_to_give = user.guild.get_role(
+                MODDELMSG_QUARANTINE_WRITEPERMISSION_ROLEID
+            )
+            if role_to_give and role_to_give not in user.roles:
+                await user.add_roles(
+                    role_to_give,
+                    reason=("User was quarantined with write permission"),
+                )
+        except discord.Forbidden:
+            print(
+                "Error: Failed to add quarantine write permission role: Missing permissions"
+            )
+        except Exception as e:
+            print(f"Error: Failed to add quarantine write permission role: {e}")
 
 
 async def unquarantine_user(
@@ -104,6 +128,22 @@ async def unquarantine_user(
         print("Error: Failed to add a role during unquarantine: Missing permissions")
     except Exception as e:
         print(f"Error: Failed to add a role during unquarantine: {e}")
+    # This one doesn't have to succeed, necessarily
+    try:
+        role_to_remove = user.guild.get_role(
+            MODDELMSG_QUARANTINE_WRITEPERMISSION_ROLEID
+        )
+        if role_to_remove and role_to_remove in user.roles:
+            await user.remove_roles(
+                role_to_remove,
+                reason="User was unquarantined" if not reason else reason,
+            )
+    except discord.Forbidden:
+        print(
+            "Error: Failed to remove quarantine write permission role: Missing permissions"
+        )
+    except Exception as e:
+        print(f"Error: Failed to remove quarantine write permission role: {e}")
     return had_role, success_count == 2
 
 
@@ -157,7 +197,9 @@ async def on_message(message: discord.Message):
 
             # Add Quarantined role to the user
             await quarantine_user(
-                message.author, reason="Automod: Forbidden content detected"
+                message.author,
+                with_write_permission=True,
+                reason="Automod: Forbidden content detected",
             )
 
             # DM the quarantined user

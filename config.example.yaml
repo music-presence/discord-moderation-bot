@@ -7,6 +7,7 @@ moddelmsg:
   notify_user_id: 789789789789
   quarantine_roleid: 123456789
   quarantine_channelid: 123456789
+  quarantine_writepermission_roleid: 123456789
   forbidden_regexes:
     - "badword1"
     - "badword2"
