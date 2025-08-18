@@ -147,6 +147,30 @@ async def unquarantine_user(
     return had_role, success_count == 2
 
 
+class FormattedMessage:
+    content: str
+    attachment_text: str
+    shortened: str
+
+    def __init__(self, message: discord.Message):
+        self.content = message.content.strip()
+        self.attachment_text = ""
+        for attachment in [a.url for a in message.attachments]:
+            if self.attachment_text:
+                self.attachment_text += " "
+            self.attachment_text += f"[attachment: {attachment}]"
+        self.shortened = self.content[:256] or "*empty*"
+        if self.attachment_text:
+            if self.shortened:
+                self.shortened += " "
+            self.shortened += self.attachment_text
+
+    def pretty(self, *, shortened: bool = False):
+        if shortened:
+            return self.shortened
+        return f"{self.content} {self.attachment_text}"
+
+
 @client.event
 async def on_ready():
     for guild in client.guilds:
@@ -167,9 +191,12 @@ async def on_message(message: discord.Message):
     for pattern in FORBIDDEN_REGEXES:
         if pattern.search(message.content):
             # Delete the message
+            formatted_message = FormattedMessage(message)
             try:
                 await message.delete()
-                print("[AUTOMOD] Message deleted.")
+                print(
+                    f"[AUTOMOD] Deleted message from {message.author} ({message.author.id}) in #{message.channel.name}: {formatted_message.pretty()}"
+                )
             except Exception as e:
                 print(f"[AUTOMOD] Failed to delete message: {e}")
 
@@ -182,7 +209,7 @@ async def on_message(message: discord.Message):
                         description=(
                             f"**Author :** {message.author.mention}\n"
                             f"**Channel :** {message.channel.mention}\n"
-                            f"```{message.content}```"
+                            f"```{formatted_message.pretty(shortened=True)}```"
                         ),
                         color=discord.Color.orange(),
                         timestamp=datetime.now(timezone.utc),
@@ -208,7 +235,7 @@ async def on_message(message: discord.Message):
                     title="🚨 You have been sanctioned",
                     description=(
                         "You have been given the **Quarantined** role because of the following message:\n"
-                        f"```{message.content}```\n"
+                        f"```{formatted_message.pretty(shortened=True)}```\n"
                         f"If you believe this is a mistake, you can appeal by contacting the staff in the **https://discord.com/channels/{bot_member.guild.id}/{MODDELMSG_QUARANTINE_CHANNELID}** channel."
                     ),
                     color=discord.Color.orange(),
@@ -292,23 +319,12 @@ async def moddelmsg(
                     if message.type == discord.MessageType.new_member:
                         continue  # do not delete welcome messages
 
-                    content = message.content.strip()
-                    attachment_text = ""
-                    for attachment in [a.url for a in message.attachments]:
-                        if attachment_text:
-                            attachment_text += " "
-                        attachment_text += f"[attachment: {attachment}]"
-                    log_content = content[:200] or "*empty*"
-                    if attachment_text:
-                        if log_content:
-                            log_content += " "
-                        log_content += attachment_text
-
-                    deleted_messages.append((channel.name, log_content))
+                    formatted_message = FormattedMessage(message)
+                    deleted_messages.append((channel.name, formatted_message.shortened))
 
                     await message.delete()
                     print(
-                        f"Deleted message from {user} ({user.id}) in #{channel.name}: {content} {attachment_text}"
+                        f"Deleted message from {user} ({user.id}) in #{channel.name}: {formatted_message.pretty()}"
                     )
                     await asyncio.sleep(0.2)  # avoid rate limits
             except discord.Forbidden:
