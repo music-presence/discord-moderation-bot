@@ -54,6 +54,27 @@ async def setup_guild(guild: discord.Guild):
     print(f"Synced {len(commands)} commands: {', '.join([c.name for c in commands])}")
 
 
+async def quarantine_user(user: discord.Member, *, reason: str | None = None):
+    try:
+        role_to_remove = user.guild.get_role(MODDELMSG_TIMEOUT_REMOVE_ROLEID)
+        if role_to_remove and role_to_remove in user.roles:
+            await user.remove_roles(role_to_remove, reason="User was quarantined")
+    except discord.Forbidden:
+        print("Error: Failed to remove role during timeout: Missing permissions")
+    except Exception as e:
+        print(f"Error: Failed to remove role during timeout: {e}")
+    try:
+        role_to_give = user.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
+        if role_to_give and role_to_give not in user.roles:
+            await user.add_roles(role_to_give, reason="User was quarantined" if not reason else reason)
+    except discord.Forbidden:
+        print(
+            "Error: Failed to add quarantine role during timeout: Missing permissions"
+        )
+    except Exception as e:
+        print(f"Error: Failed to add quarantine role during timeout: {e}")
+
+
 @client.event
 async def on_ready():
     for guild in client.guilds:
@@ -115,6 +136,8 @@ async def on_message(message: discord.Message):
             except Exception as e:
                 print(f"[AUTOMOD] Failed to add Quarantined role: {e}")
 
+            await quarantine_user(message.author, reason="Automod: Forbidden content detected")
+
             # DM the quarantined user
             try:
                 dm_embed = discord.Embed(
@@ -135,6 +158,7 @@ async def on_message(message: discord.Message):
                 print(f"[AUTOMOD] Could not send DM to user: {e}")
 
             break
+
 
 @tree.command(
     name="moddelmsg",
@@ -186,20 +210,7 @@ async def moddelmsg(
             return await interaction.followup.send(
                 "Failed to timeout user. Missing permissions.", ephemeral=True
             )
-        try:
-            role_to_remove = interaction.guild.get_role(MODDELMSG_TIMEOUT_REMOVE_ROLEID)
-            if role_to_remove and role_to_remove in user.roles:
-                await user.remove_roles(role_to_remove, reason="User was timed out")
-        except discord.Forbidden:
-            print("Error: Failed to remove role during timeout. Missing permissions.")
-        try:
-            role_to_give = interaction.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
-            if role_to_give and role_to_give not in user.roles:
-                await user.add_roles(role_to_give, reason="User is quarantined")
-        except discord.Forbidden:
-            print(
-                "Error: Failed to add quarantine role during timeout. Missing permissions."
-            )
+        await quarantine_user(user)
 
     deleted_messages = []
     notify_channel = interaction.guild.get_channel(MODDELMSG_NOTIFY_CHANNELID)
