@@ -33,7 +33,9 @@ MODDELMSG_TIMEOUT_REMOVE_ROLEID = config.get("moddelmsg", {}).get(
 MODDELMSG_NOTIFY_CHANNELID = config.get("moddelmsg", {}).get("notify_channelid", 0)
 MODDELMSG_NOTIFY_USER_ID = config.get("moddelmsg", {}).get("notify_user_id", 0)
 MODDELMSG_QUARANTINE_ROLEID = config.get("moddelmsg", {}).get("quarantine_roleid", 0)
-MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get("quarantine_channelid", 0)
+MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get(
+    "quarantine_channelid", 0
+)
 
 FORBIDDEN_REGEXES = [
     re.compile(pattern)
@@ -66,7 +68,9 @@ async def quarantine_user(user: discord.Member, *, reason: str | None = None):
     try:
         role_to_give = user.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
         if role_to_give and role_to_give not in user.roles:
-            await user.add_roles(role_to_give, reason="User was quarantined" if not reason else reason)
+            await user.add_roles(
+                role_to_give, reason="User was quarantined" if not reason else reason
+            )
     except discord.Forbidden:
         print(
             "Error: Failed to add quarantine role during timeout: Missing permissions"
@@ -79,6 +83,7 @@ async def quarantine_user(user: discord.Member, *, reason: str | None = None):
 async def on_ready():
     for guild in client.guilds:
         await setup_guild(guild)
+
 
 @client.event
 async def on_message(message: discord.Message):
@@ -127,8 +132,7 @@ async def on_message(message: discord.Message):
                 quarantine_role = message.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
                 if quarantine_role and quarantine_role not in message.author.roles:
                     await message.author.add_roles(
-                        quarantine_role,
-                        reason="Automod: Forbidden content detected"
+                        quarantine_role, reason="Automod: Forbidden content detected"
                     )
                     print("[AUTOMOD] Quarantined role added.")
                 else:
@@ -136,7 +140,9 @@ async def on_message(message: discord.Message):
             except Exception as e:
                 print(f"[AUTOMOD] Failed to add Quarantined role: {e}")
 
-            await quarantine_user(message.author, reason="Automod: Forbidden content detected")
+            await quarantine_user(
+                message.author, reason="Automod: Forbidden content detected"
+            )
 
             # DM the quarantined user
             try:
@@ -151,7 +157,10 @@ async def on_message(message: discord.Message):
                     timestamp=datetime.now(timezone.utc),
                 )
                 dm_embed.set_footer(text="Music Presence Automod")
-                dm_embed.set_author(name=message.guild.name, icon_url=message.guild.icon.url if message.guild.icon else None)
+                dm_embed.set_author(
+                    name=message.guild.name,
+                    icon_url=message.guild.icon.url if message.guild.icon else None,
+                )
                 await message.author.send(embed=dm_embed)
                 print("[AUTOMOD] DM sent to user.")
             except Exception as e:
