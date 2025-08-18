@@ -62,9 +62,9 @@ async def quarantine_user(user: discord.Member, *, reason: str | None = None):
         if role_to_remove and role_to_remove in user.roles:
             await user.remove_roles(role_to_remove, reason="User was quarantined")
     except discord.Forbidden:
-        print("Error: Failed to remove role during timeout: Missing permissions")
+        print("Error: Failed to remove a role during quarantine: Missing permissions")
     except Exception as e:
-        print(f"Error: Failed to remove role during timeout: {e}")
+        print(f"Error: Failed to remove a role during quarantine: {e}")
     try:
         role_to_give = user.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
         if role_to_give and role_to_give not in user.roles:
@@ -72,11 +72,39 @@ async def quarantine_user(user: discord.Member, *, reason: str | None = None):
                 role_to_give, reason="User was quarantined" if not reason else reason
             )
     except discord.Forbidden:
-        print(
-            "Error: Failed to add quarantine role during timeout: Missing permissions"
-        )
+        print("Error: Failed to add quarantine role: Missing permissions")
     except Exception as e:
-        print(f"Error: Failed to add quarantine role during timeout: {e}")
+        print(f"Error: Failed to add quarantine role: {e}")
+
+
+async def unquarantine_user(
+    user: discord.Member, *, reason: str | None = None
+) -> tuple[bool, bool]:
+    success_count = 0
+    had_role = False
+    try:
+        role_to_remove = user.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
+        if role_to_remove and role_to_remove in user.roles:
+            had_role = True
+            await user.remove_roles(
+                role_to_remove,
+                reason="User was unquarantined" if not reason else reason,
+            )
+            success_count += 1
+    except discord.Forbidden:
+        print("Error: Failed to remove quarantine role: Missing permissions")
+    except Exception as e:
+        print(f"Error: Failed to remove quarantine role: {e}")
+    try:
+        role_to_give = user.guild.get_role(MODDELMSG_TIMEOUT_REMOVE_ROLEID)
+        if role_to_give and role_to_give not in user.roles:
+            await user.add_roles(role_to_give, reason="User was unquarantined")
+            success_count += 1
+    except discord.Forbidden:
+        print("Error: Failed to add a role during unquarantine: Missing permissions")
+    except Exception as e:
+        print(f"Error: Failed to add a role during unquarantine: {e}")
+    return had_role, success_count == 2
 
 
 @client.event
@@ -307,6 +335,36 @@ async def moddelmsg(
     notify_user = interaction.guild.get_member(MODDELMSG_NOTIFY_USER_ID)
     if notify_user and notify_channel:
         await notify_channel.send(f"{notify_user.mention} New moderation events.")
+
+
+@tree.command(
+    name="modunquarantine",
+    description="Unquarantine a quarantined user.",
+)
+@discord_command.describe(
+    user="User to unquarantine",
+)
+async def modunquarantine(interaction: discord.Interaction, user: discord.Member):
+    if interaction.user == user:
+        return await interaction.response.send_message(
+            f"It's not that simple.", ephemeral=True
+        )
+    await interaction.response.defer(ephemeral=True)
+    had_role, success = await unquarantine_user(user)
+    if not had_role:
+        return await interaction.followup.send(
+            f"User does not have the configured quarantine role", ephemeral=True
+        )
+    if not success:
+        return await interaction.followup.send(
+            f"Something went wrong while attempting to unquarantine the user",
+            ephemeral=True,
+        )
+    return await interaction.followup.send(
+        f"Successfully unquarantined {user.mention}",
+        ephemeral=True,
+        allowed_mentions=discord.AllowedMentions(users=[]),
+    )
 
 
 client.run(os.getenv("BOT_TOKEN"))
