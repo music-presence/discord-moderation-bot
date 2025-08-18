@@ -38,7 +38,7 @@ MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get(
 )
 
 FORBIDDEN_REGEXES = [
-    re.compile(pattern)
+    re.compile(pattern, flags=re.IGNORECASE | re.MULTILINE)
     for pattern in config.get("moddelmsg", {}).get("forbidden_regexes", [])
 ]
 
