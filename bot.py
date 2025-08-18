@@ -156,18 +156,6 @@ async def on_message(message: discord.Message):
                 print(f"[AUTOMOD] Failed to send log embed: {e}")
 
             # Add Quarantined role to the user
-            try:
-                quarantine_role = message.guild.get_role(MODDELMSG_QUARANTINE_ROLEID)
-                if quarantine_role and quarantine_role not in message.author.roles:
-                    await message.author.add_roles(
-                        quarantine_role, reason="Automod: Forbidden content detected"
-                    )
-                    print("[AUTOMOD] Quarantined role added.")
-                else:
-                    print("[AUTOMOD] Quarantine role missing or already present.")
-            except Exception as e:
-                print(f"[AUTOMOD] Failed to add Quarantined role: {e}")
-
             await quarantine_user(
                 message.author, reason="Automod: Forbidden content detected"
             )
