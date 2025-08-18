@@ -33,6 +33,7 @@ MODDELMSG_TIMEOUT_REMOVE_ROLEID = config.get("moddelmsg", {}).get(
 MODDELMSG_NOTIFY_CHANNELID = config.get("moddelmsg", {}).get("notify_channelid", 0)
 MODDELMSG_NOTIFY_USER_ID = config.get("moddelmsg", {}).get("notify_user_id", 0)
 MODDELMSG_QUARANTINE_ROLEID = config.get("moddelmsg", {}).get("quarantine_roleid", 0)
+MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get("quarantine_channelid", 0)
 
 FORBIDDEN_REGEXES = [
     re.compile(pattern)
@@ -121,7 +122,7 @@ async def on_message(message: discord.Message):
                     description=(
                         "You have been given the **Quarantined** role because of the following message:\n"
                         f"```{message.content}```\n"
-                        "If you believe this is a mistake, you can appeal by contacting the staff in the **#quarantined** channel."
+                        f"If you believe this is a mistake, you can appeal by contacting the staff in the **https://discord.com/channels/{bot_member.guild.id}/{MODDELMSG_QUARANTINE_CHANNELID}** channel."
                     ),
                     color=discord.Color.orange(),
                     timestamp=datetime.now(timezone.utc),
