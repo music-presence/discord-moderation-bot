@@ -509,10 +509,15 @@ async def modsusedits(
                                 edit_label = f"{int(round(edit_hours / 24.0))}d"
 
                             link = f"https://discord.com/channels/{guild.id}/{channel.id}/{message.id}"
-                            line = f"- age: {age_label} edit: {edit_label} link: {link}"
+                            log_line = (
+                                f"age: {age_label} edit: {edit_label} link: {link}"
+                            )
+                            line = f"- {log_line}"
 
                             buffer.append(line)
                             buffer_chars += len(line) + 1
+
+                            print("modsusedits: " + log_line)
 
                             if buffer_chars > MAX_CHARS:
                                 await flush_buffer()
