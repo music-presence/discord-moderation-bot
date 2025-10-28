@@ -514,9 +514,10 @@ async def modsusedits(interaction: discord.Interaction, hours: int = 8):
                 # Skip channel, if access is forbidden.
                 break
 
-            except discord.HTTPException:
+            except discord.HTTPException as e:
                 # Back off and retry.
-                await asyncio.sleep(5)
+                print(f"modsusedits: Error: {e}")
+                await asyncio.sleep(60)
                 continue
 
     await flush_buffer()
