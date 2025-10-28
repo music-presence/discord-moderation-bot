@@ -420,8 +420,11 @@ async def modunquarantine(interaction: discord.Interaction, user: discord.Member
 )
 @discord_command.describe(
     hours="Number of hours between send and edit to count (default is 8).",
+    start_channel_id="The ID of the channel to start at. Any channels that would come before it are skipped.",
 )
-async def modsusedits(interaction: discord.Interaction, hours: int = 8):
+async def modsusedits(
+    interaction: discord.Interaction, hours: int = 8, start_channel_id: str = "0"
+):
     await interaction.response.send_message(
         "Searching... this may take a while.", ephemeral=False
     )
@@ -468,7 +471,13 @@ async def modsusedits(interaction: discord.Interaction, hours: int = 8):
         buffer = buffer[len(lines_to_send) :]
         buffer_chars = sum(len(l) + 1 for l in buffer)
 
+    found_start_channel = False
     for channel in guild.text_channels:
+        if not found_start_channel:
+            if int(start_channel_id) <= 0 or channel.id == int(start_channel_id):
+                found_start_channel = True
+            else:
+                continue
         while True:
             last_id = None
             try:
