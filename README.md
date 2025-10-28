@@ -9,6 +9,7 @@ Simple bot for scoped moderation commands.
 - Get notified in a dedicated channel of any new moderation events
 - Unquarantine members again with `/modunquarantine`
 - Automatically delete messages that match custom regular expressions
+- Scan for suspicious messages in the server that were edited far after the date they were sent with `/modsusedits`
 
 ## Setup
 

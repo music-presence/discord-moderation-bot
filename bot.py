@@ -16,6 +16,7 @@ import asyncio
 import dotenv
 from datetime import datetime, timedelta, timezone
 import re
+import sys
 
 dotenv.load_dotenv()
 
@@ -405,6 +406,115 @@ async def modunquarantine(interaction: discord.Interaction, user: discord.Member
         ephemeral=True,
         allowed_mentions=discord.AllowedMentions(users=[]),
     )
+
+
+@tree.command(
+    name="modsusedits",
+    description="Scan server messages for edits made more than N hours after sending.",
+)
+@discord_command.describe(
+    hours="Number of hours between send and edit to count (default is 8).",
+)
+async def modsusedits(interaction: discord.Interaction, hours: int = 8):
+    await interaction.response.send_message(
+        "Searching... this may take a while.", ephemeral=False
+    )
+
+    guild = interaction.guild
+    if guild is None:
+        return
+
+    threshold = timedelta(hours=hours)
+    buffer = []
+    buffer_chars = 0
+    MAX_CHARS = 1950
+
+    async def flush_buffer():
+        nonlocal buffer, buffer_chars
+
+        if not buffer:
+            return
+
+        MAX_CHARS = 2000
+        lines_to_send = []
+        total_len = 0
+
+        for line in buffer:
+            if total_len + len(line) + 1 > MAX_CHARS:
+                break
+            lines_to_send.append(line)
+            total_len += len(line) + 1
+
+        if not lines_to_send:
+            lines_to_send.append(buffer[0])
+            total_len = len(buffer[0]) + 1
+
+        msg = "\n".join(lines_to_send)
+
+        sent = False
+        while not sent:
+            try:
+                await interaction.followup.send(msg)
+                sent = True
+            except discord.HTTPException:
+                await asyncio.sleep(2)
+
+        buffer = buffer[len(lines_to_send) :]
+        buffer_chars = sum(len(l) + 1 for l in buffer)
+
+    for channel in guild.text_channels:
+        while True:
+            last_id = None
+            try:
+                count = 0
+                print(f"modsusedits: Scanning channel #{channel.name}")
+                async for message in channel.history(
+                    limit=None, oldest_first=True, after=last_id
+                ):
+                    count += 1
+                    if count % 1000 == 0:
+                        print(
+                            f"modsusedits: {count} messages scanned in #{channel.name}"
+                        )
+                    if message.edited_at:
+                        delta = message.edited_at - message.created_at
+                        if delta > threshold:
+                            total_age = datetime.now(timezone.utc) - message.created_at
+
+                            age_hours = total_age.total_seconds() / 3600.0
+                            if age_hours < 24:
+                                age_label = f"{int(round(age_hours))}h"
+                            else:
+                                age_label = f"{int(round(age_hours / 24.0))}d"
+
+                            edit_hours = delta.total_seconds() / 3600.0
+                            if edit_hours < 24:
+                                edit_label = f"{int(round(edit_hours))}h"
+                            else:
+                                edit_label = f"{int(round(edit_hours / 24.0))}d"
+
+                            link = f"https://discord.com/channels/{guild.id}/{channel.id}/{message.id}"
+                            line = f"- age: {age_label} edit: {edit_label} link: {link}"
+
+                            buffer.append(line)
+                            buffer_chars += len(line) + 1
+
+                            if buffer_chars > MAX_CHARS:
+                                await flush_buffer()
+                    last_id = message.id
+                break
+
+            except discord.Forbidden:
+                # Skip channel, if access is forbidden.
+                break
+
+            except discord.HTTPException:
+                # Back off and retry.
+                await asyncio.sleep(5)
+                continue
+
+    await flush_buffer()
+    await interaction.followup.send("Done.")
 
 
 client.run(os.getenv("BOT_TOKEN"))
