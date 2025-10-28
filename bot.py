@@ -218,6 +218,12 @@ async def on_message(message: discord.Message):
                     embed.set_footer(text=f"User ID: {message.author.id}")
                     await notify_channel.send(embed=embed)
                     print("[AUTOMOD] Log embed sent to notify channel.")
+                    # Ping the user that wants to get notified
+                    notify_user = interaction.guild.get_member(MODDELMSG_NOTIFY_USER_ID)
+                    if notify_user and notify_channel:
+                        await notify_channel.send(
+                            f"{notify_user.mention} New moderation events."
+                        )
                 else:
                     print("[AUTOMOD] Notify channel not found.")
             except Exception as e:
