@@ -280,12 +280,6 @@ async def moddelmsg(
             ephemeral=True,
         )
 
-    # Check that the user is not a bot
-    if user.bot:
-        return await interaction.followup.send(
-            f"Cannot delete messages from a bot.", ephemeral=True
-        )
-
     # Cap hours to MODDELMSG_MAX_HOURS
     hours_to_use = min(max(0, hours), MODDELMSG_MAX_HOURS)
     cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours_to_use)
