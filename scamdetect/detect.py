@@ -94,25 +94,29 @@ async def scan_discord_attachments_for_scams(
     # phrases. This should improve scam recognition times.
     found_scam_phrases = []
     attachment_images = []
+    detection_count = 0
     for attachment in reversed(attachments):
         try:
             data = await attachment.read(use_cached=True)
             image = image_from_data(data)
             attachment_images.append(image)
             scam_phrases = find_text_scam_phrases(image_to_text(image))
+            detection_count += 1
             found_scam_phrases.extend(scam_phrases)
         except Exception as e:
             print(f"Error: Failed to read attachment for scam phrase detection: {e}")
             continue
         if len(found_scam_phrases) >= SCAM_PHRASE_COUNT_THRESHOLD:
             break
+    second_pass = False
     if len(found_scam_phrases) < SCAM_PHRASE_COUNT_THRESHOLD:
         found_scam_phrases = []
-        print("Scam detection: Second pass")
+        second_pass = True
         for image in attachment_images:
             try:
                 image = enhanced_image(image)
                 scam_phrases = find_text_scam_phrases(image_to_text(image))
+                detection_count += 1
                 found_scam_phrases.extend(scam_phrases)
             except Exception as e:
                 print(
@@ -122,10 +126,16 @@ async def scan_discord_attachments_for_scams(
             found_scam_phrases.extend(scam_phrases)
             if len(found_scam_phrases) >= SCAM_PHRASE_COUNT_THRESHOLD:
                 break
-    return ScamScanResult(
+    result = ScamScanResult(
         is_scam=len(found_scam_phrases) >= SCAM_PHRASE_COUNT_THRESHOLD,
         phrases=found_scam_phrases,
     )
+    print(
+        f"Scanned Discord attachments: "
+        f"is_scam={result.is_scam} detection_count={detection_count} "
+        f"second_pass={second_pass} phrases={found_scam_phrases}"
+    )
+    return result
 
 
 if __name__ == "__main__":
