@@ -1,0 +1,40 @@
+withdraw(al)?
+\$\s*\d+((\.|,)\d+)?
+\d+((\.|,)\d+)?\s*USD(T|C)?
+money
+transfer(red)?
+transaction
+wallet
+funds
+andrew tate
+cobratate
+crypto
+cryptocurrency
+casino
+reward
+rakeback
+promo code
+vip(\s|-)club
+deposit
+network fee
+x.com
+mrbeast
+vyro
+tether
+block explorer
+blockchain
+bank card
+debig card
+credit card
+visa
+mastercard
+coin
+drop\s*shipping
+k(a)?i\s*cenat
+([a-z]{2,})win\.com
+([a-z]{2,})bet\.com
+([a-z]{2,})gamb(le)?\.com
+tasowin(\.com)?
+hasobet(\.com)?
+hasobin(\.com)?
+credited

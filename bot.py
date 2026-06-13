@@ -18,6 +18,9 @@ from datetime import datetime, timedelta, timezone
 import re
 import sys
 
+from scamdetect import scan_discord_attachments_for_scams
+
+
 dotenv.load_dotenv()
 
 with open("config.yaml", "r") as f:
@@ -155,27 +158,118 @@ class FormattedMessage:
 
     def __init__(self, message: discord.Message):
         self.content = message.content.strip()
-        self.attachment_text = ""
-        for attachment in [a.url for a in message.attachments]:
-            if self.attachment_text:
-                self.attachment_text += " "
-            self.attachment_text += f"[attachment: {attachment}]"
-        self.shortened = self.content[:256] or "*empty*"
-        if self.attachment_text:
-            if self.shortened:
-                self.shortened += " "
-            self.shortened += self.attachment_text
+        # self.attachment_text = ""
+        # for attachment in [a.url for a in message.attachments]:
+        #     if self.attachment_text:
+        #         self.attachment_text += " "
+        #     self.attachment_text += f"[attachment: {attachment}]"
+        self.shortened = (
+            self.content[:512] + "\u2026" if len(self.content) > 512 else self.content
+        )
+        # if self.attachment_text:
+        #     if self.shortened:
+        #         self.shortened += " "
+        #     self.shortened += self.attachment_text
 
     def pretty(self, *, shortened: bool = False):
         if shortened:
             return self.shortened
-        return f"{self.content} {self.attachment_text}"
+        # return f"{self.content} {self.attachment_text}"
+        return self.content
 
 
 @client.event
 async def on_ready():
     for guild in client.guilds:
         await setup_guild(guild)
+
+
+async def delete_message_and_quarantine_member(
+    message: discord.Message, mod_note: str | None = None
+):
+    # Get the attachments as files first
+    attachment_files = [await a.to_file() for a in message.attachments]
+
+    # Delete the message
+    formatted_message = FormattedMessage(message)
+    try:
+        await message.delete()
+        print(
+            f"[AUTOMOD] Deleted message from {message.author} ({message.author.id}) in #{message.channel.name}: {formatted_message.pretty()}"
+        )
+    except Exception as e:
+        print(f"[AUTOMOD] Failed to delete message: {e}")
+
+    # Notify in the log channel
+    try:
+        notify_channel = message.guild.get_channel(MODDELMSG_NOTIFY_CHANNELID)
+        if notify_channel:
+            embed = discord.Embed(
+                description=(
+                    f"**Channel:** {message.channel.mention}\n"
+                    f"**Author:** {message.author.mention} / `{message.author.display_name}` / `{message.author.name}`\n"
+                    f"**User ID:** `{message.author.id}`"
+                    + (
+                        f"\n**Note**: {mod_note}"
+                        if mod_note is not None and len(mod_note) > 0
+                        else ""
+                    )
+                ),
+                color=discord.Color.orange(),
+                timestamp=datetime.now(timezone.utc),
+            )
+            deleted_text = formatted_message.pretty(shortened=True)
+            await notify_channel.send(
+                f"🚨 **[AUTOMOD] Forbidden content deleted**"
+                + (f"\n```{deleted_text}```" if len(deleted_text) > 0 else ""),
+                embed=embed,
+                files=attachment_files,
+            )
+            print("[AUTOMOD] Log embed sent to notify channel.")
+            # Ping the user that wants to get notified
+            notify_user = message.guild.get_member(MODDELMSG_NOTIFY_USER_ID)
+            if notify_user and notify_channel:
+                await notify_channel.send(
+                    f"{notify_user.mention} New moderation events."
+                )
+        else:
+            print("[AUTOMOD] Notify channel not found.")
+    except Exception as e:
+        print(f"[AUTOMOD] Failed to send log embed: {e}")
+
+    # Add Quarantined role to the user
+    await quarantine_user(
+        message.author,
+        with_write_permission=True,
+        reason="Automod: Forbidden content detected",
+    )
+
+    # DM the quarantined user
+    try:
+        message_text = formatted_message.pretty(shortened=True)
+        dm_embed = discord.Embed(
+            title="You have been quarantined.",
+            description=(
+                f"You may no longer send messages in the server because "
+                + (
+                    f"of the following message:\n```{message_text}```\n"
+                    if len(message_text) > 0
+                    else "one of your messages contained suspicious attachments. "
+                )
+                + f"If you believe this to be a mistake, you can appeal by contacting the staff in the **https://discord.com/channels/{message.guild.id}/{MODDELMSG_QUARANTINE_CHANNELID}** channel."
+            ),
+            color=discord.Color.orange(),
+            timestamp=datetime.now(timezone.utc),
+        )
+        dm_embed.set_footer(text="Music Presence Moderation")
+        dm_embed.set_author(
+            name=message.guild.name,
+            icon_url=message.guild.icon.url if message.guild.icon else None,
+        )
+        await message.author.send(embed=dm_embed)
+        print("[AUTOMOD] DM sent to user.")
+    except Exception as e:
+        print(f"[AUTOMOD] Could not send DM to user: {e}")
 
 
 @client.event
@@ -185,80 +279,25 @@ async def on_message(message: discord.Message):
 
     # Bypass if > or = bot's role (for mods)
     if isinstance(message.author, discord.Member):
-        bot_member = message.guild.me
-        if message.author.top_role >= bot_member.top_role:
+        if message.author.top_role >= message.guild.me.top_role:
             return
 
     for pattern in FORBIDDEN_REGEXES:
         if pattern.search(message.content):
-            # Delete the message
-            formatted_message = FormattedMessage(message)
-            try:
-                await message.delete()
-                print(
-                    f"[AUTOMOD] Deleted message from {message.author} ({message.author.id}) in #{message.channel.name}: {formatted_message.pretty()}"
-                )
-            except Exception as e:
-                print(f"[AUTOMOD] Failed to delete message: {e}")
-
-            # Notify in the log channel
-            try:
-                notify_channel = message.guild.get_channel(MODDELMSG_NOTIFY_CHANNELID)
-                if notify_channel:
-                    embed = discord.Embed(
-                        title="🚨 AUTOMOD: Forbidden Content Deleted",
-                        description=(
-                            f"**Author :** {message.author.mention}\n"
-                            f"**Channel :** {message.channel.mention}\n"
-                            f"```{formatted_message.pretty(shortened=True)}```"
-                        ),
-                        color=discord.Color.orange(),
-                        timestamp=datetime.now(timezone.utc),
-                    )
-                    embed.set_footer(text=f"User ID: {message.author.id}")
-                    await notify_channel.send(embed=embed)
-                    print("[AUTOMOD] Log embed sent to notify channel.")
-                    # Ping the user that wants to get notified
-                    notify_user = interaction.guild.get_member(MODDELMSG_NOTIFY_USER_ID)
-                    if notify_user and notify_channel:
-                        await notify_channel.send(
-                            f"{notify_user.mention} New moderation events."
-                        )
-                else:
-                    print("[AUTOMOD] Notify channel not found.")
-            except Exception as e:
-                print(f"[AUTOMOD] Failed to send log embed: {e}")
-
-            # Add Quarantined role to the user
-            await quarantine_user(
-                message.author,
-                with_write_permission=True,
-                reason="Automod: Forbidden content detected",
+            await delete_message_and_quarantine_member(
+                message, mod_note=f"Matched pattern: {pattern.pattern}"
             )
+            return
 
-            # DM the quarantined user
-            try:
-                dm_embed = discord.Embed(
-                    title="🚨 You have been sanctioned",
-                    description=(
-                        "You have been given the **Quarantined** role because of the following message:\n"
-                        f"```{formatted_message.pretty(shortened=True)}```\n"
-                        f"If you believe this is a mistake, you can appeal by contacting the staff in the **https://discord.com/channels/{bot_member.guild.id}/{MODDELMSG_QUARANTINE_CHANNELID}** channel."
-                    ),
-                    color=discord.Color.orange(),
-                    timestamp=datetime.now(timezone.utc),
-                )
-                dm_embed.set_footer(text="Music Presence Automod")
-                dm_embed.set_author(
-                    name=message.guild.name,
-                    icon_url=message.guild.icon.url if message.guild.icon else None,
-                )
-                await message.author.send(embed=dm_embed)
-                print("[AUTOMOD] DM sent to user.")
-            except Exception as e:
-                print(f"[AUTOMOD] Could not send DM to user: {e}")
-
-            break
+    if len(message.attachments) > 0:
+        result = await scan_discord_attachments_for_scams(message.attachments)
+        if result.is_scam:
+            note = (
+                f"Scam detected with phrases: {', '.join(result.phrases)} "
+                f"({len(result.phrases)} phrases)"
+            )
+            print(f"[AUTOMOD] {note}")
+            await delete_message_and_quarantine_member(message, mod_note=note)
 
 
 @tree.command(
