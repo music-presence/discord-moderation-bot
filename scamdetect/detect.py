@@ -4,10 +4,17 @@ import sys
 import json
 from dataclasses import dataclass
 from io import BytesIO
+import warnings
 
 import discord
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+
+warnings.filterwarnings(
+    "ignore",
+    message="Truncated File Read",
+    category=UserWarning,
+)
 
 
 SCAM_PHRASE_COUNT_THRESHOLD = 3
