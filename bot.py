@@ -43,6 +43,12 @@ MODDELMSG_QUARANTINE_CHANNELID = config.get("moddelmsg", {}).get(
 MODDELMSG_QUARANTINE_WRITEPERMISSION_ROLEID = config.get("moddelmsg", {}).get(
     "quarantine_writepermission_roleid", 0
 )
+ATTACHMENT_COOLDOWN_ROLEID = config.get("moddelmsg", {}).get(
+    "attachment_cooldown_roleid", 0
+)
+ATTACHMENT_COOLDOWN_DURATION_SECONDS = config.get("moddelmsg", {}).get(
+    "attachment_cooldown_duration_seconds", 10
+)
 
 FORBIDDEN_REGEXES = [
     re.compile(pattern, flags=re.IGNORECASE | re.MULTILINE)
@@ -61,6 +67,23 @@ async def setup_guild(guild: discord.Guild):
     tree.copy_global_to(guild=guild)
     commands = await tree.sync(guild=guild)
     print(f"Synced {len(commands)} commands: {', '.join([c.name for c in commands])}")
+    # Make sure nobody still has the attachment cooldown role
+    try:
+        role = guild.get_role(ATTACHMENT_COOLDOWN_ROLEID)
+        if role:
+            count = len(role.members)
+            for member in role.members:
+                await member.remove_roles(
+                    role, reason="Role removal at moderation bot startup"
+                )
+            if count > 0:
+                print(f"Removed the attachment cooldown role from {count} members")
+    except discord.Forbidden:
+        print(
+            "Error: Failed to remove attachment cooldown role from all members: Missing permissions"
+        )
+    except Exception as e:
+        print(f"Error: Failed to remove attachment cooldown role from all members: {e}")
 
 
 async def quarantine_user(
@@ -272,6 +295,39 @@ async def delete_message_and_quarantine_member(
         print(f"[AUTOMOD] Could not send DM to user: {e}")
 
 
+async def remove_attachment_cooldown_role(
+    user: discord.Member,
+    delay_seconds: int = 0,
+):
+    if delay_seconds > 0:
+        await asyncio.sleep(delay_seconds)
+    try:
+        role = user.guild.get_role(ATTACHMENT_COOLDOWN_ROLEID)
+        if role and role in user.roles:
+            await user.remove_roles(role, reason="Attachment cooldown ended")
+            print(f"Removed attachment cooldown role from {user.id}")
+    except discord.Forbidden:
+        print("Error: Failed to remove attachment cooldown role: Missing permissions")
+    except Exception as e:
+        print(f"Error: Failed to remove attachment cooldown role: {e}")
+
+
+async def give_attachment_cooldown_role(
+    user: discord.Member,
+    duration_seconds: int,
+):
+    try:
+        role = user.guild.get_role(ATTACHMENT_COOLDOWN_ROLEID)
+        if role and role not in user.roles:
+            await user.add_roles(role, reason="User sent an attachment recently")
+            print(f"Gave attachment cooldown role to {user.id}")
+            asyncio.create_task(remove_attachment_cooldown_role(user, duration_seconds))
+    except discord.Forbidden:
+        print("Error: Failed to add attachment cooldown role: Missing permissions")
+    except Exception as e:
+        print(f"Error: Failed to add attachment cooldown role: {e}")
+
+
 @client.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -281,6 +337,12 @@ async def on_message(message: discord.Message):
     if isinstance(message.author, discord.Member):
         if message.author.top_role >= message.guild.me.top_role:
             return
+
+    # Give the attachment cooldown role, if this message has an attachment
+    if len(message.attachments) > 0:
+        await give_attachment_cooldown_role(
+            message.author, max(1, min(120, ATTACHMENT_COOLDOWN_DURATION_SECONDS))
+        )
 
     for pattern in FORBIDDEN_REGEXES:
         if pattern.search(message.content):
